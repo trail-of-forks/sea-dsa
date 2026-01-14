@@ -1,7 +1,14 @@
 #pragma once
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wstring-conversion"
+#endif
 #include "boost/container/flat_map.hpp"
 #include "boost/container/flat_set.hpp"
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 #include "boost/functional/hash.hpp"
 #include "boost/iterator/filter_iterator.hpp"
 #include "boost/iterator/indirect_iterator.hpp"
@@ -200,11 +207,11 @@ public:
 
   virtual const Cell &getRetCell(const llvm::Function &fn) const;
 
-  llvm::Optional<DsaAllocSite *> getAllocSite(const llvm::Value &v) const {
+  std::optional<DsaAllocSite *> getAllocSite(const llvm::Value &v) const {
     auto it = m_valueToAllocSite.find(&v);
     if (it != m_valueToAllocSite.end()) return it->second;
 
-    return llvm::None;
+    return std::nullopt;
   }
 
   DsaAllocSite *mkAllocSite(const llvm::Value &v);

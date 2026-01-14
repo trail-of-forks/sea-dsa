@@ -506,7 +506,7 @@ bool CompleteCallGraphAnalysis::runOnModule(Module &M) {
     change = false;
     for (auto &kv : graphs) {
       for (DsaCallSite &cs : kv.second->callsites()) {
-        if (kv.first->getName().equals("main") ||
+        if (kv.first->getName() == "main" ||
             // XXX: a callsite might not be cloned if the function has
             // not been inlined yet but in that case its allocation
             // sites should be empty and we skip the callsite.

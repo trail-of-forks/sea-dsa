@@ -24,8 +24,19 @@ class AllocWrapInfo;
 class DsaLibFuncInfo;
 class BottomUpTopDownGlobalAnalysis;
 
-class SeaDsaAAResult : public llvm::AAResultBase<SeaDsaAAResult> {
-  using Base = llvm::AAResultBase<SeaDsaAAResult>;
+template <typename T> class SeaDsaAAResultBase {
+public:
+  SeaDsaAAResultBase() = default;
+  SeaDsaAAResultBase(SeaDsaAAResultBase &&) = default;
+  SeaDsaAAResultBase &operator=(SeaDsaAAResultBase &&) = default;
+  llvm::AliasResult alias(const llvm::MemoryLocation &,
+                          const llvm::MemoryLocation &, llvm::AAQueryInfo &) {
+    return llvm::AliasResult::MayAlias;
+  }
+};
+
+class SeaDsaAAResult : public SeaDsaAAResultBase<SeaDsaAAResult> {
+  using Base = SeaDsaAAResultBase<SeaDsaAAResult>;
   friend Base;
 
 public:
@@ -41,7 +52,60 @@ public:
   }
 
   llvm::AliasResult alias(const llvm::MemoryLocation &,
+                          const llvm::MemoryLocation &, llvm::AAQueryInfo &,
+                          const llvm::Instruction *CtxI);
+  llvm::AliasResult alias(const llvm::MemoryLocation &,
                           const llvm::MemoryLocation &, llvm::AAQueryInfo &);
+
+  llvm::ModRefInfo getModRefInfoMask(const llvm::MemoryLocation &,
+                                     llvm::AAQueryInfo &, bool) {
+    return llvm::ModRefInfo::ModRef;
+  }
+  llvm::ModRefInfo getArgModRefInfo(const llvm::CallBase &, unsigned) {
+    return llvm::ModRefInfo::ModRef;
+  }
+  llvm::ModRefInfo getArgModRefInfo(const llvm::CallBase *Call,
+                                    unsigned ArgIdx) {
+    if (!Call) return llvm::ModRefInfo::ModRef;
+    return getArgModRefInfo(*Call, ArgIdx);
+  }
+  llvm::MemoryEffects getMemoryEffects(const llvm::CallBase &,
+                                       llvm::AAQueryInfo &) {
+    return llvm::MemoryEffects::unknown();
+  }
+  llvm::MemoryEffects getMemoryEffects(const llvm::CallBase *Call,
+                                       llvm::AAQueryInfo &AAQI) {
+    if (!Call) return llvm::MemoryEffects::unknown();
+    return getMemoryEffects(*Call, AAQI);
+  }
+  llvm::MemoryEffects getMemoryEffects(const llvm::Function &) {
+    return llvm::MemoryEffects::unknown();
+  }
+  llvm::MemoryEffects getMemoryEffects(const llvm::Function *F) {
+    if (!F) return llvm::MemoryEffects::unknown();
+    return getMemoryEffects(*F);
+  }
+  llvm::ModRefInfo getModRefInfo(const llvm::CallBase &,
+                                 const llvm::MemoryLocation &,
+                                 llvm::AAQueryInfo &) {
+    return llvm::ModRefInfo::ModRef;
+  }
+  llvm::ModRefInfo getModRefInfo(const llvm::CallBase *Call,
+                                 const llvm::MemoryLocation &Loc,
+                                 llvm::AAQueryInfo &AAQI) {
+    if (!Call) return llvm::ModRefInfo::ModRef;
+    return getModRefInfo(*Call, Loc, AAQI);
+  }
+  llvm::ModRefInfo getModRefInfo(const llvm::CallBase &, const llvm::CallBase &,
+                                 llvm::AAQueryInfo &) {
+    return llvm::ModRefInfo::ModRef;
+  }
+  llvm::ModRefInfo getModRefInfo(const llvm::CallBase *Call1,
+                                 const llvm::CallBase *Call2,
+                                 llvm::AAQueryInfo &AAQI) {
+    if (!Call1 || !Call2) return llvm::ModRefInfo::ModRef;
+    return getModRefInfo(*Call1, *Call2, AAQI);
+  }
 
 private:
   llvm::TargetLibraryInfoWrapperPass &m_tliWrapper;

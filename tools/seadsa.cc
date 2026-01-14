@@ -10,6 +10,10 @@
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/LinkAllPasses.h"
+#if __has_include("llvm/Analysis/AAEval.h")
+#include "llvm/Analysis/AAEval.h"
+#define SEADSA_HAS_AAEVAL 1
+#endif
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileSystem.h"
@@ -220,7 +224,13 @@ int main(int argc, char **argv) {
       pass_manager.add(seadsa::createDsaCallGraphPrinterPass());
     }
 
-    if (AAEval) { pass_manager.add(llvm::createAAEvalPass()); }
+    if (AAEval) {
+#ifdef SEADSA_HAS_AAEVAL
+      pass_manager.add(llvm::createAAEvalPass());
+#else
+      llvm::errs() << "AAEval pass is not available in this LLVM build.\n";
+#endif
+    }
 
     if (!MemDot && !MemViewer && !seadsa::PrintDsaStats &&
         !seadsa::PrintCallGraphStats && !CallGraphDot && !AAEval) {

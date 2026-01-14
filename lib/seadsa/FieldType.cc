@@ -46,7 +46,7 @@ llvm::Type *GetInnermostTypeImpl(llvm::Type *const Ty, SeenTypes &seen) {
     if (!FirstTy) break;
 
     // FIXME: We cannot check this
-    // if (FirstTy->isPointerTy() && FirstTy->getPointerElementType() == currentTy)
+    // if (FirstTy->isPointerTy() && FirstTy == currentTy)
     //   break;
 
     if (FirstTy == currentTy) break;

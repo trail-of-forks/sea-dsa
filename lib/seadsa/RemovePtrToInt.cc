@@ -62,9 +62,11 @@ visitIntStoreInst(StoreInst *SI, Function &F, const DataLayout &DL,
 
   IRBuilder<> IRB(LI);
 
-  auto *Int8PtrPtrTy = Type::getInt8PtrTy(SI->getContext())->getPointerTo();
-  auto newLI = IRB.CreateLoad(Type::getInt8PtrTy(SI->getContext()),
-                              IRB.CreateBitCast(loadAddr, Int8PtrPtrTy));
+  auto *Int8PtrPtrTy =
+      llvm::PointerType::get(SI->getContext(), SI->getPointerAddressSpace());
+  auto newLI = IRB.CreateLoad(
+      llvm::PointerType::get(SI->getContext(), SI->getPointerAddressSpace()),
+      IRB.CreateBitCast(loadAddr, Int8PtrPtrTy));
   if (LI->hasName()) newLI->setName(LI->getName());
   newLI->setAlignment(LI->getAlign());
   newLI->setOrdering(LI->getOrdering());
@@ -111,7 +113,8 @@ visitIntStoreInst2(StoreInst *SI, Function &F, const DataLayout &DL,
 
   IRBuilder<> IRB(SI);
 
-  auto *Int8PtrTy = Type::getInt8PtrTy(SI->getContext());
+  auto *Int8PtrTy =
+      llvm::PointerType::get(SI->getContext(), SI->getPointerAddressSpace());
   auto *Int8PtrPtrTy = Int8PtrTy->getPointerTo();
 
   auto *val = P2I->getPointerOperand();
@@ -246,7 +249,12 @@ public:
 
     IRBuilder<> IRB(&I);
 
-    ptr = IRB.CreateBitCast(ptr, IRB.getInt8PtrTy());
+    // LLVM 20: use opaque ptr, keep address space from the original pointer
+    auto *PtrTy = cast<PointerType>(ptr->getType()); // should be a ptr
+    unsigned AS = PtrTy->getAddressSpace();
+    auto *OpaquePtrTy = PointerType::get(IRB.getContext(), AS);
+
+    ptr = IRB.CreateBitCast(ptr, OpaquePtrTy);
     auto *gep = IRB.CreateGEP(IRB.getInt8Ty(), ptr, I.getOperand(1));
     return gep;
   }
@@ -429,8 +437,9 @@ bool RemovePtrToInt::runOnFunction(Function &F) {
   if (F.isDeclaration()) return false;
 
   // Skip special functions
-  if (F.getName().startswith("seahorn.") || F.getName().startswith("shadow.") ||
-      F.getName().startswith("verifier."))
+  if (F.getName().starts_with("seahorn.") ||
+      F.getName().starts_with("shadow.") ||
+      F.getName().starts_with("verifier."))
     return false;
 
   DOG(errs() << "\n~~~~~~~ Begin of RP2I on " << F.getName() << " ~~~~~ \n");

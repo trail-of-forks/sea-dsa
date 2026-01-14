@@ -6,7 +6,14 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wstring-conversion"
+#endif
 #include "boost/container/flat_set.hpp"
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 #include <boost/bimap.hpp>
 #include <boost/iterator/filter_iterator.hpp>
 #include <boost/iterator/transform_iterator.hpp>
@@ -87,7 +94,7 @@ class DsaInfo {
   GraphSet m_seen_graphs;
 
   typedef typename NodeInfoMap::value_type binding_t;
-  struct get_second : public std::unary_function<binding_t, NodeInfo> {
+  struct get_second : public std::function<NodeInfo(const binding_t &)> {
     const NodeInfo &operator()(const binding_t &kv) const { return kv.second; }
   };
 

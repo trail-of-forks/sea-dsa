@@ -4,6 +4,11 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/iterator.h"
 #include "llvm/Analysis/MemorySSA.h"
+#include "llvm/IR/DerivedUser.h"
+#include "llvm/IR/OperandTraits.h"
+#include "llvm/IR/User.h"
+
+#include <optional>
 
 namespace SMSSAHelpers {
 struct AllAccessTag {};
@@ -61,8 +66,8 @@ public:
   }
 
   void setDsaCell(const seadsa::Cell &c) { m_Cell = c; }
-  void setDsaCell(const llvm::Optional<Cell> &c) {
-    if (c.hasValue()) m_Cell = c.getValue();
+  void setDsaCell(const std::optional<Cell> &c) {
+    if (c.has_value()) m_Cell = c.value();
   }
   const seadsa::Cell &getDsaCell() const { return m_Cell; }
 
@@ -84,7 +89,9 @@ protected:
 
   SeaMemoryAccess(LLVMContext &C, unsigned Vty, DeleteValueTy DeleteValue,
                   BasicBlock *BB, unsigned NumOperands)
-      : DerivedUser(Type::getVoidTy(C), Vty, nullptr, NumOperands, DeleteValue),
+      : DerivedUser(Type::getVoidTy(C), Vty,
+                    DerivedUser::AllocInfo(User::HungOffOperandsAllocMarker{}),
+                    DeleteValue),
         Block(BB) {}
 
   // Use deleteValue() to delete a generic MemoryAccess.
@@ -137,7 +144,7 @@ public:
 
   // Retrieve AliasResult type of the optimized access. Ideally this would be
   // returned by the caching walker and may go away in the future.
-  Optional<AliasResult> getOptimizedAccessType() const {
+  std::optional<AliasResult> getOptimizedAccessType() const {
     return OptimizedAccessAlias;
   }
 
@@ -160,12 +167,13 @@ protected:
   // Use deleteValue() to delete a generic MemoryUseOrDef.
   ~SeaMemoryUseOrDef() = default;
 
-  void setOptimizedAccessType(Optional<AliasResult> AR) {
+  void setOptimizedAccessType(std::optional<AliasResult> AR) {
     OptimizedAccessAlias = AR;
   }
 
-  void setDefiningAccess(SeaMemoryAccess *DMA, bool Optimized = false,
-                         Optional<AliasResult> AR = AliasResult(AliasResult::MayAlias)) {
+  void setDefiningAccess(
+      SeaMemoryAccess *DMA, bool Optimized = false,
+      std::optional<AliasResult> AR = AliasResult(AliasResult::MayAlias)) {
     if (!Optimized) {
       setOperand(0, DMA);
       return;
@@ -176,7 +184,7 @@ protected:
 
 private:
   Instruction *MemoryInstruction;
-  Optional<AliasResult> OptimizedAccessAlias;
+  std::optional<AliasResult> OptimizedAccessAlias;
 };
 
 class SeaMemoryUse final : public SeaMemoryUseOrDef {
@@ -189,7 +197,9 @@ public:
                           /*NumOperands=*/1) {}
 
   // allocate space for exactly one operand
-  void *operator new(size_t s) { return User::operator new(s, 1); }
+  void *operator new(size_t s) {
+    return User::operator new(s, User::HungOffOperandsAllocMarker());
+  }
 
   static bool classof(const Value *MA) {
     return MA->getValueID() == MemoryUseVal;
@@ -244,7 +254,9 @@ public:
         ID(Ver) {}
 
   // allocate space for exactly two operands
-  void *operator new(size_t s) { return User::operator new(s, 2); }
+  void *operator new(size_t s) {
+    return User::operator new(s, User::HungOffOperandsAllocMarker());
+  }
 
   static bool classof(const Value *MA) {
     return MA->getValueID() == MemoryDefVal;
@@ -315,7 +327,9 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(SeaMemoryUseOrDef, SeaMemoryAccess)
 
 class SeaMemoryPhi final : public SeaMemoryAccess {
   // allocate space for exactly zero operands
-  void *operator new(size_t s) { return User::operator new(s); }
+  void *operator new(size_t s) {
+    return User::operator new(s, User::HungOffOperandsAllocMarker());
+  }
 
 public:
   /// Provide fast operand accessors
@@ -524,7 +538,7 @@ inline void SeaMemoryUseOrDef::resetOptimized() {
 
 namespace llvm {
 template <>
-struct OperandTraits<seadsa::SeaMemoryPhi> : public HungoffOperandTraits<2> {};
+struct OperandTraits<seadsa::SeaMemoryPhi> : public HungoffOperandTraits {};
 } // namespace llvm
 
 namespace seadsa {

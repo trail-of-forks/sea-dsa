@@ -24,8 +24,7 @@ static bool isConstantNoPtr(const llvm::Value *v) {
     return false;
 
   // Cheaply check if the global value has a string-like name.
-  if (v->hasName() && v->getName().startswith(".str."))
-    return true;
+  if (v->hasName() && v->getName().starts_with(".str.")) return true;
 
   if (!v->getType()->isPointerTy()) return false;
 
@@ -173,14 +172,13 @@ void Cloner::copyAllocationSites(
 }
 
 void Cloner::importCallPaths(DsaAllocSite &site,
-                             llvm::Optional<DsaAllocSite *> other) {
+                             std::optional<DsaAllocSite *> other) {
   if (isUnset())
     return;
 
-  assert(other.hasValue());
-  if (!other.hasValue())
-    return;
+  assert(other.has_value());
+  if (!other.has_value()) return;
 
-  site.importCallPaths(*other.getValue(),
-                       DsaCallSite(*m_context.m_cs.getValue()), isBottomUp());
+  site.importCallPaths(*other.value(), DsaCallSite(*m_context.m_cs.value()),
+                       isBottomUp());
 }

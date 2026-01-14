@@ -7,6 +7,7 @@
 #include "llvm/Pass.h"
 
 #include <memory>
+#include <optional>
 
 #include "seadsa/DsaAnalysis.hh"
 
@@ -67,12 +68,12 @@ public:
   bool splitDsaNodes() const;
 
   // Return the id of the field pointed by the given cell c.
-  llvm::Optional<unsigned> getCellId(const Cell &c) const;
+  std::optional<unsigned> getCellId(const Cell &c) const;
 
   ShadowMemInstOp getShadowMemOp(const llvm::CallInst &ci) const;
 
   // Return cell associated to the shadow mem call instruction.
-  llvm::Optional<Cell> getShadowMemCell(const llvm::CallInst &ci) const;
+  std::optional<Cell> getShadowMemCell(const llvm::CallInst &ci) const;
 
   // Return a pair <def,use> with the defined and used variable by the
   // shadow mem instruction. If the instruction does not define or use

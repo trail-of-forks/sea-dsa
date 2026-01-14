@@ -12,7 +12,14 @@
 #include "seadsa/Graph.hh"
 #include "seadsa/Mapper.hh"
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wstring-conversion"
+#endif
 #include "boost/container/flat_set.hpp"
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 namespace llvm {
 class DataLayout;

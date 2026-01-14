@@ -103,7 +103,8 @@ public:
   po_iterator_storage(BlockedEdges &VSet) : Visited(VSet) {}
   po_iterator_storage(const po_iterator_storage &S) : Visited(S.Visited) {}
 
-  bool insertEdge(Optional<const BasicBlock *> src, const BasicBlock *dst) {
+  bool insertEdge(std::optional<const BasicBlock *> src,
+                  const BasicBlock *dst) {
     return Visited.insert(dst);
   }
   void finishPostorder(const BasicBlock *bb) {}
@@ -279,8 +280,12 @@ class GlobalBuilder : public BlockBuilderBase {
     if (isa<UndefValue>(Init)) return;
 
     if (const ConstantVector *CP = dyn_cast<ConstantVector>(Init)) {
-      unsigned ElementSize =
-          m_dl.getTypeAllocSize(CP->getType()->getElementType()).getFixedSize();
+      TypeSize TS = m_dl.getTypeAllocSize(CP->getType()->getElementType());
+      if (TS.isScalable()) {
+        // TODO: handle scalable vectors
+        return;
+      }
+      unsigned ElementSize = TS.getFixedValue();
       for (unsigned i = 0, e = CP->getNumOperands(); i != e; ++i) {
         unsigned noffset = offset + i * ElementSize;
         seadsa::Cell nc = seadsa::Cell(c.getNode(), noffset);
@@ -292,9 +297,12 @@ class GlobalBuilder : public BlockBuilderBase {
     if (isa<ConstantAggregateZero>(Init)) { return; }
 
     if (const ConstantArray *CPA = dyn_cast<ConstantArray>(Init)) {
-      unsigned ElementSize =
-          m_dl.getTypeAllocSize(CPA->getType()->getElementType())
-              .getFixedSize();
+      auto TS = m_dl.getTypeAllocSize(CPA->getType()->getElementType());
+      if (TS.isScalable()) {
+        // TODO: handle scalable arrays
+        return;
+      }
+      unsigned ElementSize = TS.getFixedValue();
       for (unsigned i = 0, e = CPA->getNumOperands(); i != e; ++i) {
         unsigned noffset = offset + i * ElementSize;
         seadsa::Cell nc = seadsa::Cell(c.getNode(), noffset);
@@ -361,11 +369,11 @@ public:
       : BlockBuilderBase(func, graph, dl, tli, allocInfo) {}
 
   void initGlobalVariables() {
-    if (!m_func.getName().equals("main")) return;
+    if (!(m_func.getName() == "main")) return;
 
     Module &M = *(m_func.getParent());
     for (auto &gv : M.globals()) {
-      if (gv.getName().equals("llvm.used")) continue;
+      if (gv.getName() == "llvm.used") continue;
 
       if (gv.hasInitializer()) {
         seadsa::Cell c = valueCell(gv);
@@ -514,9 +522,9 @@ class IntraBlockBuilder : public InstVisitor<IntraBlockBuilder>,
     // may need to define multiple sea_dsa_link types. For example:
     // sea_dsa_link_to_charptr(const void *p, unsigned offset, const char*
     // p2);
-    if (fn->getName().startswith("sea_dsa_link"))
+    if (fn->getName().starts_with("sea_dsa_link"))
       fnType = SeadsaFn::LINK;
-    else if (fn->getName().startswith("sea_dsa_access"))
+    else if (fn->getName().starts_with("sea_dsa_access"))
       fnType = SeadsaFn::ACCESS;
 
     return fnType;
@@ -526,7 +534,7 @@ class IntraBlockBuilder : public InstVisitor<IntraBlockBuilder>,
   static bool isSeaDsaFn(const Function *fn) {
     if (!fn) return false;
     auto n = fn->getName();
-    return n.startswith("sea_dsa_");
+    return n.starts_with("sea_dsa_");
   }
 
   /// Returns true if \p F is a \p ownsem_ family of functions
@@ -1202,7 +1210,7 @@ void IntraBlockBuilder::visitExternalCall(CallBase &I) {
   Cell &c = m_graph.mkCell(I, Cell(m_graph.mkNode(), 0));
   c.getNode()->setExternal();
 
-  if (callee->getName().startswith("verifier.nondet.abstract.memory")) return;
+  if (callee->getName().starts_with("verifier.nondet.abstract.memory")) return;
 
   // TODO: better handling of external funcations
   // TOOD: Use function attributes and external specifications
@@ -1684,7 +1692,9 @@ bool BlockBuilderBase::isFixedOffset(const IntToPtrInst &inst, Value *&base,
       }
       offset = C->getZExtValue();
     } else if (auto *LI = dyn_cast<LoadInst>(X)) {
-      PointerType *liType = Type::getInt8PtrTy(LI->getContext());
+      PointerType *liType = llvm::PointerType::get(
+          LI->getContext(), LI->getPointerAddressSpace());
+      // PointerType *liType = Type::getInt8PtrTy(LI->getContext());
       seadsa::Cell ptrCell =
           valueCell(*LI->getPointerOperand()->stripPointerCasts());
       ptrCell.addAccessedType(0, liType);
@@ -1812,8 +1822,8 @@ bool isEscapingPtrToInt(const PtrToIntInst &def) {
           // to it if (callee->doesNotAccessMemory())
           //   continue;
           auto n = callee->getName();
-          if (n.startswith("__sea_set_extptr_slot") ||
-              n.equals("verifier.assume") || n.equals("llvm.assume"))
+          if (n.starts_with("__sea_set_extptr_slot") ||
+              (n == "verifier.assume") || (n == "llvm.assume"))
             continue;
         }
       }
@@ -1898,7 +1908,7 @@ void LocalAnalysis::runOnFunction(Function &F, Graph &g) {
   revTopoSort(F, bbs);
   boost::reverse(bbs);
 
-  if (F.getName().equals("main")) {
+  if (F.getName() == "main") {
     GlobalBuilder globalBuilder(F, g, m_dl, tli, m_allocInfo);
     globalBuilder.initGlobalVariables();
   }

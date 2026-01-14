@@ -4,7 +4,14 @@
 #include "seadsa/Graph.hh"
 
 #include <unordered_map>
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wstring-conversion"
+#endif
 #include <boost/container/flat_map.hpp>
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 namespace seadsa
 {

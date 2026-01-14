@@ -22,6 +22,10 @@ if(TOP_LEVEL)
     cmake_policy(SET CMP0077 NEW)
   endif()
 
+  if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.30")
+    cmake_policy(SET CMP0167 NEW)
+  endif()
+
   if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
       "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." FORCE)
@@ -51,15 +55,53 @@ endif()
 
 option (SEA_DSA_STATIC_EXE "Static executable." OFF)
 
+## Find zstd (required by LLVM)
+if (TOP_LEVEL)
+  # Set zstd search paths to ensure we find zstd from Homebrew
+  set(ZSTD_SEARCH_PATHS "")
+  if (APPLE)
+    # Add both ARM and Intel Mac Homebrew paths
+    if (EXISTS "/opt/homebrew/opt/zstd")
+      list(APPEND ZSTD_SEARCH_PATHS "/opt/homebrew/opt/zstd")
+    endif()
+    if (EXISTS "/usr/local/opt/zstd")
+      list(APPEND ZSTD_SEARCH_PATHS "/usr/local/opt/zstd")
+    endif()
+  endif()
+
+  # Try config-based discovery first
+  find_package(zstd CONFIG QUIET)
+
+  if (NOT TARGET zstd::libzstd_shared)
+    # Fallback to manual discovery with explicit hints
+    find_path(zstd_INCLUDE_DIR NAMES zstd.h
+              HINTS ${ZSTD_SEARCH_PATHS}
+              PATH_SUFFIXES include)
+    find_library(zstd_LIBRARY NAMES zstd libzstd
+                 HINTS ${ZSTD_SEARCH_PATHS}
+                 PATH_SUFFIXES lib)
+
+    if (zstd_INCLUDE_DIR AND zstd_LIBRARY)
+      add_library(zstd::libzstd_shared UNKNOWN IMPORTED)
+      set_target_properties(zstd::libzstd_shared PROPERTIES
+          INTERFACE_INCLUDE_DIRECTORIES "${zstd_INCLUDE_DIR}"
+          IMPORTED_LOCATION "${zstd_LIBRARY}")
+      message(STATUS "Found zstd: ${zstd_LIBRARY}")
+    else()
+      message(WARNING "zstd not found. LLVM may fail to configure. Install zstd: brew install zstd")
+    endif()
+  endif()
+endif()
+
 ## llvm
 if (TOP_LEVEL)
-  find_package (LLVM 15.0 CONFIG)
+  find_package (LLVM 20 CONFIG)
   if (NOT LLVM_FOUND)
     ExternalProject_Get_Property (llvm INSTALL_DIR)
     set (LLVM_ROOT ${INSTALL_DIR})
     set (LLVM_DIR ${LLVM_ROOT}/lib/cmake/llvm CACHE PATH
       "Forced location of LLVM cmake config" FORCE)
-    message (WARNING "No llvm found. Install LLVM 15.")
+    message (WARNING "No llvm found. Install LLVM 20.")
     return()
   endif()
 
@@ -115,7 +157,7 @@ if (TOP_LEVEL)
 endif ()
 
 # sea-dsa specific
-set(CMAKE_CXX_STANDARD 14 CACHE STRING "C++ standard to conform to")
+set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to conform to")
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS NO)
 

@@ -16,6 +16,7 @@ set(LLVM_LINK_COMPONENTS
 
 add_llvm_executable(seadsa DISABLE_LLVM_LINK_LLVM_DYLIB seadsa.cc)
 add_executable(libcSpecGen libcSpecGen.cc)
+set_target_properties(libcSpecGen PROPERTIES BUILD_RPATH "${LLVM_LIBRARY_DIRS}")
 
 target_link_libraries (seadsa PRIVATE SeaDsaAnalysis)
 add_custom_target(sea-dsa-tool DEPENDS seadsa)

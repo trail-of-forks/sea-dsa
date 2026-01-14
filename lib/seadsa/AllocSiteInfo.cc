@@ -18,6 +18,8 @@
 #include "seadsa/TypeUtils.hh"
 #include "seadsa/support/Debug.h"
 
+#include <optional>
+
 #define ASI_LOG(...) LOG("alloc_site_info", __VA_ARGS__)
 // #define ASI_LOG(...) do { __VA_ARGS__ ; } while (false)
 
@@ -26,9 +28,9 @@ using namespace llvm;
 
 char AllocSiteInfo::ID = 0;
 
-static MDNode *mkMetaConstant(llvm::Optional<unsigned> val, LLVMContext &ctx) {
-  MDNode *meta = MDNode::get(ctx, llvm::None);
-  if (val.hasValue())
+static MDNode *mkMetaConstant(std::optional<unsigned> val, LLVMContext &ctx) {
+  MDNode *meta = MDNode::get(ctx, std::nullopt);
+  if (val.has_value())
     meta = MDNode::get(ctx, ConstantAsMetadata::get(ConstantInt::get(
                                 ctx, llvm::APInt(64u, size_t(*val)))));
   return meta;
@@ -90,26 +92,28 @@ bool AllocSiteInfo::runOnModule(Module &M) {
   return changed;
 }
 
-Optional<unsigned> AllocSiteInfo::maybeEvalAllocSize(Value &v,
-                                                     LLVMContext &ctx) {
-  llvm::Optional<unsigned> bytes = llvm::None;
+std::optional<unsigned> AllocSiteInfo::maybeEvalAllocSize(Value &v,
+                                                          LLVMContext &ctx) {
+  std::optional<unsigned> bytes = std::nullopt;
 
   llvm::ObjectSizeOpts Opts;
   Opts.RoundToAlign = true;
   Opts.EvalMode = llvm::ObjectSizeOpts::Mode::Max;
   ObjectSizeOffsetVisitor OSOV(*m_dl, m_tli, ctx, Opts);
-  auto OffsetAlign = OSOV.compute(&v);
-  if (OSOV.knownSize(OffsetAlign)) {
-    const int64_t sz = OffsetAlign.first.getSExtValue();
+  llvm::SizeOffsetAPInt OffsetAlign = OSOV.compute(&v);
+
+  if (OffsetAlign.knownSize()) {
+    const llvm::APInt &Sz = OffsetAlign.Size;
+    int64_t sz = Sz.getSExtValue();
     assert(sz >= 0);
-    bytes = unsigned(sz);
+    bytes = static_cast<unsigned>(sz);
   }
 
   return bytes;
 }
 
 void AllocSiteInfo::markAsAllocSite(Instruction &inst,
-                                    Optional<unsigned> allocatedBytes) {
+                                    std::optional<unsigned> allocatedBytes) {
   MDNode *meta = mkMetaConstant(allocatedBytes, inst.getContext());
   inst.setMetadata(m_allocSiteMetadataTag, meta);
 }
@@ -131,7 +135,8 @@ bool AllocSiteInfo::markAllocs(Function &F) {
       if (auto *ci = dyn_cast<CallInst>(&inst)) {
         if (auto *callee = ci->getCalledFunction()) {
           if (m_awi->isAllocWrapper(*callee)) {
-            Optional<unsigned> bytes = maybeEvalAllocSize(*ci, F.getContext());
+            std::optional<unsigned> bytes =
+                maybeEvalAllocSize(*ci, F.getContext());
             markAsAllocSite(*ci, bytes);
             changed = true;
           }
@@ -152,7 +157,7 @@ bool AllocSiteInfo::isAllocSite(const Value &v) {
   return false;
 }
 
-llvm::Optional<unsigned> AllocSiteInfo::getAllocSiteSize(const Value &v) {
+std::optional<unsigned> AllocSiteInfo::getAllocSiteSize(const Value &v) {
   assert(isAllocSite(v) && "Check if it's an alloc site first!");
   MDNode *meta = nullptr;
   if (auto *inst = dyn_cast<Instruction>(&v))
@@ -173,7 +178,7 @@ llvm::Optional<unsigned> AllocSiteInfo::getAllocSiteSize(const Value &v) {
       return unsigned(valInt->getLimitedValue());
     }
 
-  return llvm::None;
+  return std::nullopt;
 }
 
 // static llvm::RegisterPass<seadsa::AllocSiteInfo> X("seadsa-alloc-site-info",

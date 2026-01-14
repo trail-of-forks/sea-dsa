@@ -1,5 +1,4 @@
 #include "llvm/ADT/SCCIterator.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
@@ -9,6 +8,8 @@
 #include "seadsa/CallGraphUtils.hh"
 #include "seadsa/CallGraphWrapper.hh"
 #include "seadsa/support/Debug.h"
+
+#include <optional>
 
 using namespace llvm;
 
@@ -41,11 +42,10 @@ void CallGraphWrapper::buildDependencies() {
         continue;
 
       for (auto &callRecord : *cgn) {
-	llvm::Optional<DsaCallSite> DsaCS =
-	  call_graph_utils::getDsaCallSite(callRecord);
-	if (!DsaCS.hasValue())
-	  continue;
-	insertCallers(DsaCS.getValue().getCallee(), DsaCS.getValue());	
+        std::optional<DsaCallSite> DsaCS =
+            call_graph_utils::getDsaCallSite(callRecord);
+        if (!DsaCS.has_value()) continue;
+        insertCallers(DsaCS.value().getCallee(), DsaCS.value());
       }
     }
   }
@@ -66,11 +66,10 @@ void CallGraphWrapper::buildDependencies() {
       insert(callers[fn].begin(), callers[fn].end(), *uses);
 
       for (auto &callRecord : *cgn) {
-	llvm::Optional<DsaCallSite> DsaCS =
-	  call_graph_utils::getDsaCallSite(callRecord);
-	if (!DsaCS.hasValue())
-	  continue;
-        insert(DsaCS.getValue(), *defs);
+        std::optional<DsaCallSite> DsaCS =
+            call_graph_utils::getDsaCallSite(callRecord);
+        if (!DsaCS.has_value()) continue;
+        insert(DsaCS.value(), *defs);
       }
     }
     
